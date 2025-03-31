@@ -2,7 +2,6 @@
 Router for the logging module.
 """
 
-from datetime import datetime
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
@@ -17,11 +16,11 @@ router = APIRouter()
 
 
 @router.post("/", response_model=LogEntryResponse, status_code=201)
-async def create_log_entry(log_entry: LogEntryCreate, db: Session = Depends(get_db)):
+async def create_log_entry(log_entry: LogEntryCreate, db: Session = Depends(get_db)) -> LogEntryResponse:
     """
     Create a new log entry.
     """
-    return await LoggingService.create_log_entry(db, log_entry)
+    return await LoggingService(db).create_log_entry(log_entry)
 
 
 @router.get("/", response_model=List[LogEntryResponse])
@@ -35,7 +34,7 @@ async def get_log_entries(
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of logs to return"),
     offset: int = Query(0, ge=0, description="Number of logs to skip"),
     db: Session = Depends(get_db),
-):
+) -> List[LogEntryResponse]:
     """
     Get log entries with optional filtering.
     """
@@ -55,15 +54,15 @@ async def get_log_entries(
         offset=offset,
     )
 
-    return await LoggingService.get_log_entries(db, query_params)
+    return await LoggingService(db).get_log_entries(query_params)
 
 
 @router.get("/{log_id}", response_model=LogEntryResponse)
-async def get_log_entry(log_id: int, db: Session = Depends(get_db)):
+async def get_log_entry(log_id: int, db: Session = Depends(get_db)) -> LogEntryResponse:
     """
     Get a specific log entry by ID.
     """
-    log_entry = await LoggingService.get_log_entry(db, log_id)
+    log_entry = await LoggingService(db).get_log_entry(log_id)
     if not log_entry:
         raise HTTPException(status_code=404, detail="Log entry not found")
     return log_entry
@@ -80,7 +79,7 @@ async def export_logs_to_json(
     limit: int = Query(1000, ge=1, le=10000, description="Maximum number of logs to export"),
     offset: int = Query(0, ge=0, description="Number of logs to skip"),
     db: Session = Depends(get_db),
-):
+) -> Response:
     """
     Export logs to JSON format.
     """
@@ -101,7 +100,7 @@ async def export_logs_to_json(
     )
 
     # Export logs to JSON
-    json_data = await LoggingService.export_logs_to_json(db, query_params)
+    json_data = await LoggingService(db).export_logs_to_json(query_params)
 
     # Return JSON response
     return Response(
@@ -116,7 +115,7 @@ async def get_log_statistics(
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
     end_time: Optional[str] = Query(None, description="End time (ISO format)"),
     db: Session = Depends(get_db),
-):
+) -> dict:
     """
     Get statistics about log entries.
     """
@@ -124,6 +123,6 @@ async def get_log_statistics(
     parsed_start_time = parse_datetime(start_time) if start_time else None
     parsed_end_time = parse_datetime(end_time) if end_time else None
 
-    return await LoggingService.get_log_statistics(
-        db, start_time=parsed_start_time, end_time=parsed_end_time
+    return await LoggingService(db).get_log_statistics(
+        start_time=parsed_start_time, end_time=parsed_end_time
     )
