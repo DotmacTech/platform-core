@@ -3,9 +3,10 @@ import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 
-# Import settings and DB initialization
 from app.core.settings import get_settings
 from app.db.init_db import init_db
 
@@ -62,6 +63,30 @@ tags_metadata = [
     },
 ]
 
+from contextlib import asynccontextmanager
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Handle startup and shutdown events.
+    """
+    # Startup
+    logger.info("Starting up application...")
+    try:
+        # Initialize database
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Error during startup: {e}")
+        # In production, you might want to exit the application if initialization fails
+        # import sys
+        # sys.exit(1)
+    yield
+    # Shutdown
+    logger.info("Shutting down application...")
+    logger.info("Platform Core service finished shutting down.")
+
+
 app = FastAPI(
     title="Dotmac Platform Core",
     description="""
@@ -92,12 +117,11 @@ app = FastAPI(
         "name": "MIT",
         "url": "https://opensource.org/licenses/MIT",
     },
+    lifespan=lifespan,
 )
 
 # Add CORS middleware if needed
 if settings.BACKEND_CORS_ORIGINS:
-    from fastapi.middleware.cors import CORSMiddleware
-
     app.add_middleware(
         CORSMiddleware,
         allow_origins=[str(origin) for origin in settings.BACKEND_CORS_ORIGINS],
@@ -151,33 +175,6 @@ app.include_router(
 app.include_router(
     webhooks_router, prefix=f"{settings.API_V1_STR}/webhooks", tags=["Webhooks"]
 )
-
-
-@app.on_event("startup")
-async def startup_event():
-    """
-    Initialize components on application startup.
-    """
-    logger.info("Starting up application...")
-    try:
-        # Initialize database
-        init_db()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Error during startup: {e}")
-        # In production, you might want to exit the application if initialization fails
-        # import sys
-        # sys.exit(1)
-
-
-@app.on_event("shutdown")
-async def shutdown_event():
-    """
-    Cleanup on application shutdown.
-    """
-    logger.info("Shutting down application...")
-    # Add cleanup code here if needed
-    logger.info("Platform Core service finished shutting down.")
 
 
 if __name__ == "__main__":

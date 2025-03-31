@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 
 def serialize_datetime(obj: Any) -> Any:
@@ -48,3 +48,18 @@ def get_client_ip(request) -> str:
         # Get the client's IP (first in the list)
         return x_forwarded_for.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
+
+
+def parse_datetime(date_str: Optional[str]) -> Optional[datetime]:
+    """
+    Parse a datetime string into a datetime object.
+    Supports ISO format and common date formats.
+    Returns None if the input is None or invalid.
+    """
+    if not date_str:
+        return None
+    
+    try:
+        return datetime.fromisoformat(date_str.replace('Z', '+00:00'))
+    except (ValueError, AttributeError):
+        return None

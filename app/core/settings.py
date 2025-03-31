@@ -1,7 +1,17 @@
-from functools import lru_cache
+"""
+Application settings module.
+"""
 
-from pydantic import PostgresDsn, RedisDsn, validator
+from functools import lru_cache
+from typing import Optional, Union
+
+from pydantic import AnyUrl, PostgresDsn, RedisDsn, field_validator
 from pydantic_settings import BaseSettings
+
+
+class SQLiteURL(AnyUrl):
+    allowed_schemes = {"sqlite"}
+    host_required = False
 
 
 class Settings(BaseSettings):
@@ -24,26 +34,31 @@ class Settings(BaseSettings):
     RELOAD: bool = False
 
     # Database
-    DATABASE_URL: PostgresDsn
+    DATABASE_URL: Optional[Union[PostgresDsn, SQLiteURL]] = None
+    TEST_DATABASE_URL: str = "sqlite:///:memory:"
 
     # Redis
-    REDIS_URL: RedisDsn
+    REDIS_URL: Optional[RedisDsn] = None
 
     # Security
-    SECRET_KEY: str
+    SECRET_KEY: str = "dev_secret_key"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
 
     # CORS
     BACKEND_CORS_ORIGINS: list[str] = []
 
-    @validator("BACKEND_CORS_ORIGINS", pre=True)
-    def assemble_cors_origins(cls, v: str | list[str]) -> list[str]:
+    @field_validator("BACKEND_CORS_ORIGINS", mode="before")
+    def assemble_cors_origins(cls, v: Union[str, list[str]]) -> Union[list[str], str]:
+        """
+        Parse CORS origins from string or list.
+        """
         if isinstance(v, str) and not v.startswith("["):
             return [i.strip() for i in v.split(",")]
         elif isinstance(v, (list, str)):
             return v
         raise ValueError(v)
+
 
     # Logging
     LOG_LEVEL: str = "INFO"

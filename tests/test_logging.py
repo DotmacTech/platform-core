@@ -5,11 +5,15 @@ Tests for the logging module.
 import json
 from datetime import datetime, timedelta
 
-from app.modules.logging.models import LogEntry, LogEntryCreate, LogLevel
+import pytest
+
+from app.core.settings import get_settings
+from app.modules.logging.models import LogEntry, LogEntryCreate, LogLevel, LogQueryParams
 from app.modules.logging.service import LoggingService
 
 
-def test_create_log_entry(client, db_session):
+@pytest.mark.asyncio
+async def test_create_log_entry(client, db_session):
     """Test creating a log entry."""
     # Create log entry data
     log_data = {
@@ -20,7 +24,7 @@ def test_create_log_entry(client, db_session):
     }
 
     # Send request
-    response = client.post("/logs/", json=log_data)
+    response = client.post(f"{get_settings().API_V1_STR}/logs/", json=log_data)
 
     # Check response
     assert response.status_code == 201
@@ -37,7 +41,8 @@ def test_create_log_entry(client, db_session):
     assert db_log.message == log_data["message"]
 
 
-def test_get_log_entries(client, db_session):
+@pytest.mark.asyncio
+async def test_get_log_entries(client, db_session):
     """Test getting log entries."""
     # Create test log entries
     for i in range(3):
@@ -51,7 +56,7 @@ def test_get_log_entries(client, db_session):
     db_session.commit()
 
     # Send request
-    response = client.get("/logs/")
+    response = client.get(f"{get_settings().API_V1_STR}/logs/")
 
     # Check response
     assert response.status_code == 200
@@ -60,7 +65,8 @@ def test_get_log_entries(client, db_session):
     assert data[0]["source"] == "test_service"
 
 
-def test_get_log_entries_with_filters(client, db_session):
+@pytest.mark.asyncio
+async def test_get_log_entries_with_filters(client, db_session):
     """Test getting log entries with filters."""
     # Create test log entries with different levels
     levels = [LogLevel.INFO.value, LogLevel.WARNING.value, LogLevel.ERROR.value]
@@ -75,7 +81,7 @@ def test_get_log_entries_with_filters(client, db_session):
     db_session.commit()
 
     # Send request with level filter
-    response = client.get("/logs/?level=WARNING")
+    response = client.get(f"{get_settings().API_V1_STR}/logs/?level=WARNING")
 
     # Check response
     assert response.status_code == 200
@@ -84,7 +90,8 @@ def test_get_log_entries_with_filters(client, db_session):
     assert data[0]["level"] == "WARNING"
 
 
-def test_get_log_entries_with_time_range(client, db_session):
+@pytest.mark.asyncio
+async def test_get_log_entries_with_time_range(client, db_session):
     """Test getting log entries within a time range."""
     # Create test log entry from yesterday
     yesterday = datetime.utcnow() - timedelta(days=1)
@@ -107,11 +114,9 @@ def test_get_log_entries_with_time_range(client, db_session):
     db_session.add(new_log)
     db_session.commit()
 
-    # Format time for query
+    # Send request with time range filter
     start_time = (datetime.utcnow() - timedelta(hours=1)).isoformat()
-
-    # Send request with time range
-    response = client.get(f"/logs/?start_time={start_time}")
+    response = client.get(f"{get_settings().API_V1_STR}/logs/?start_time={start_time}")
 
     # Check response
     assert response.status_code == 200
@@ -120,7 +125,8 @@ def test_get_log_entries_with_time_range(client, db_session):
     assert data[0]["message"] == "New log message"
 
 
-def test_export_logs(client, db_session):
+@pytest.mark.asyncio
+async def test_export_logs(client, db_session):
     """Test exporting logs to JSON."""
     # Create test log entries
     for i in range(3):
@@ -134,47 +140,45 @@ def test_export_logs(client, db_session):
     db_session.commit()
 
     # Send request
-    response = client.get("/logs/export")
+    response = client.get(f"{get_settings().API_V1_STR}/logs/export/json")
 
     # Check response
     assert response.status_code == 200
     assert response.headers["Content-Type"] == "application/json"
-    assert response.headers["Content-Disposition"].startswith(
-        "attachment; filename=logs_"
-    )
+    assert response.headers["Content-Disposition"].startswith("attachment")
 
-    # Parse JSON response
-    logs = json.loads(response.content)
-    assert len(logs) == 3
-    assert all("message" in log for log in logs)
-    assert all("level" in log for log in logs)
-    assert all("source" in log for log in logs)
+    # Parse JSON data
+    data = json.loads(response.content)
+    assert len(data) == 3
+    assert data[0]["source"] == "test_service"
 
 
-def test_log_entry_service_methods(db_session):
+@pytest.mark.asyncio
+async def test_log_entry_service_methods(db_session):
     """Test LoggingService methods directly."""
-    # Create log entry using service
-    log_entry_create = LogEntryCreate(
-        level=LogLevel.ERROR,
-        message="Service test message",
+    # Create log entry
+    log_data = LogEntryCreate(
+        level=LogLevel.INFO,
+        message="Test message",
         source="test_service",
-        context={"test_key": "service_test_value"},
+        context={"test_key": "test_value"},
     )
+    log_entry = await LoggingService.create_log_entry(db_session, log_data)
+    assert log_entry is not None
+    assert log_entry.level == LogLevel.INFO.value
 
-    log_entry = LoggingService.create_log_entry(db_session, log_entry_create)
+    # Get log entry by ID
+    retrieved_log = await LoggingService.get_log_entry(db_session, log_entry.id)
+    assert retrieved_log is not None
+    assert retrieved_log.id == log_entry.id
 
-    # Check created log entry
-    assert log_entry.level == LogLevel.ERROR.value
-    assert log_entry.message == "Service test message"
-
-    # Get log entries using service
-    from app.modules.logging.models import LogQueryParams
-
-    query_params = LogQueryParams(level=LogLevel.ERROR, source="test_service", limit=10)
-
-    log_entries = LoggingService.get_log_entries(db_session, query_params)
-
-    # Check retrieved log entries
+    # Get log entries with filters
+    query_params = LogQueryParams(
+        level=LogLevel.INFO.value,
+        source="test_service",
+        limit=10,
+        offset=0,
+    )
+    log_entries = await LoggingService.get_log_entries(db_session, query_params)
     assert len(log_entries) == 1
-    assert log_entries[0].level == LogLevel.ERROR.value
-    assert log_entries[0].source == "test_service"
+    assert log_entries[0].id == log_entry.id

@@ -2,22 +2,24 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
-from sqlalchemy import JSON, Boolean, Column, String, Text
+from sqlalchemy import JSON, Boolean, String, Text
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base_model import BaseModel as DBBaseModel
 from app.db.session import Base
 
 
-class FeatureFlag(Base, DBBaseModel):
+class FeatureFlag(DBBaseModel):
     """
     Feature flag model.
     """
+    __tablename__ = "featureflag"
 
-    key = Column(String(255), unique=True, index=True, nullable=False)
-    name = Column(String(255), nullable=False)
-    description = Column(Text, nullable=True)
-    enabled = Column(Boolean, default=False, nullable=False)
-    rules = Column(JSON, nullable=True)  # For user/group targeting
+    key: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    rules: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)  # For user/group targeting
 
 
 # Pydantic models for API

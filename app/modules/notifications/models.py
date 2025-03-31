@@ -2,30 +2,30 @@
 Models for the notifications module.
 """
 
-import enum
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from enum import Enum
+from typing import Any, Dict, Optional, List
 
 from pydantic import BaseModel, Field
-from sqlalchemy import JSON, Column, DateTime, Index, Integer, String, Text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, Index
+from sqlalchemy.orm import Mapped, mapped_column
 from sqlalchemy.sql import func
 
-from app.db.base_model import Base
+from app.db.base_model import BaseModel as DBBaseModel
 
 
-class NotificationType(str, enum.Enum):
+class NotificationType(str, Enum):
     """
     Enum for notification types.
     """
 
     INFO = "info"
+    SUCCESS = "success"
     WARNING = "warning"
     ERROR = "error"
-    SUCCESS = "success"
-    SYSTEM = "system"
 
 
-class NotificationPriority(str, enum.Enum):
+class NotificationPriority(str, Enum):
     """
     Enum for notification priorities.
     """
@@ -33,10 +33,10 @@ class NotificationPriority(str, enum.Enum):
     LOW = "low"
     MEDIUM = "medium"
     HIGH = "high"
-    CRITICAL = "critical"
+    URGENT = "urgent"
 
 
-class NotificationStatus(str, enum.Enum):
+class NotificationStatus(str, Enum):
     """
     Enum for notification status.
     """
@@ -45,43 +45,44 @@ class NotificationStatus(str, enum.Enum):
     DELIVERED = "delivered"
     READ = "read"
     FAILED = "failed"
+    EXPIRED = "expired"
 
 
-class Notification(Base):
+class Notification(DBBaseModel):
     """
     Model for storing notifications.
     """
 
     __tablename__ = "notifications"
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String(200), nullable=False)
-    message = Column(Text, nullable=False)
-    notification_type = Column(
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String(200), nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    notification_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default=NotificationType.INFO.value
     )
-    priority = Column(
+    priority: Mapped[str] = mapped_column(
         String(20), nullable=False, default=NotificationPriority.MEDIUM.value
     )
-    status = Column(
+    status: Mapped[str] = mapped_column(
         String(20), nullable=False, default=NotificationStatus.PENDING.value
     )
-    recipient_id = Column(
+    recipient_id: Mapped[str] = mapped_column(
         String(100), nullable=False, index=True
     )  # User ID or group ID
-    recipient_type = Column(String(20), nullable=False)  # "user" or "group"
-    sender_id = Column(String(100), nullable=True)  # User ID or system ID
-    created_at = Column(DateTime, default=func.now(), index=True)
-    delivered_at = Column(DateTime, nullable=True)
-    read_at = Column(DateTime, nullable=True)
-    expires_at = Column(DateTime, nullable=True)  # Optional expiration time
-    data = Column(JSON, nullable=True)  # Additional data for the notification
-    action_url = Column(String(500), nullable=True)  # Optional URL for action button
+    recipient_type: Mapped[str] = mapped_column(String(20), nullable=False)  # "user" or "group"
+    sender_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # User ID or system ID
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=func.now(), index=True)
+    delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    read_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)  # Optional expiration time
+    data: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, nullable=True)  # Additional data for the notification
+    action_url: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)  # Optional URL for action button
 
     # Create indexes for common query patterns
     __table_args__ = (
-        Index("idx_notifications_recipient_status", recipient_id, status),
-        Index("idx_notifications_created_at", created_at),
+        Index("idx_notifications_recipient_status", "recipient_id", "status"),
+        Index("idx_notifications_created_at", "created_at"),
     )
 
 
@@ -91,7 +92,7 @@ class NotificationCreate(BaseModel):
     Schema for creating a new notification.
     """
 
-    title: str = Field(..., description="Notification title")
+    title: str = Field(..., max_length=200, description="Notification title")
     message: str = Field(..., description="Notification message")
     notification_type: NotificationType = Field(
         NotificationType.INFO, description="Type of notification"
@@ -99,19 +100,19 @@ class NotificationCreate(BaseModel):
     priority: NotificationPriority = Field(
         NotificationPriority.MEDIUM, description="Priority of notification"
     )
-    recipient_id: str = Field(..., description="ID of the recipient (user or group)")
+    recipient_id: str = Field(..., max_length=100, description="ID of the recipient (user or group)")
     recipient_type: str = Field(
-        ..., description="Type of recipient ('user' or 'group')"
+        ..., max_length=20, description="Type of recipient ('user' or 'group')"
     )
     sender_id: Optional[str] = Field(
-        None, description="ID of the sender (user or system)"
+        None, max_length=100, description="ID of the sender (user or system)"
     )
     expires_at: Optional[datetime] = Field(None, description="Optional expiration time")
     data: Optional[Dict[str, Any]] = Field(
         None, description="Additional data for the notification"
     )
     action_url: Optional[str] = Field(
-        None, description="Optional URL for action button"
+        None, max_length=500, description="Optional URL for action button"
     )
 
 
@@ -122,6 +123,9 @@ class NotificationUpdate(BaseModel):
 
     status: Optional[NotificationStatus] = Field(
         None, description="Status of the notification"
+    )
+    delivered_at: Optional[datetime] = Field(
+        None, description="Time when the notification was delivered"
     )
     read_at: Optional[datetime] = Field(
         None, description="Time when the notification was read"
@@ -136,18 +140,18 @@ class NotificationResponse(BaseModel):
     id: int
     title: str
     message: str
-    notification_type: str
-    priority: str
-    status: str
+    notification_type: NotificationType
+    priority: NotificationPriority
+    status: NotificationStatus
     recipient_id: str
     recipient_type: str
-    sender_id: Optional[str] = None
+    sender_id: Optional[str]
     created_at: datetime
-    delivered_at: Optional[datetime] = None
-    read_at: Optional[datetime] = None
-    expires_at: Optional[datetime] = None
-    data: Optional[Dict[str, Any]] = None
-    action_url: Optional[str] = None
+    delivered_at: Optional[datetime]
+    read_at: Optional[datetime]
+    expires_at: Optional[datetime]
+    data: Optional[Dict[str, Any]]
+    action_url: Optional[str]
 
     class Config:
         orm_mode = True
@@ -157,8 +161,7 @@ class NotificationBulkCreate(BaseModel):
     """
     Schema for creating multiple notifications at once.
     """
-
-    title: str = Field(..., description="Notification title")
+    title: str = Field(..., max_length=200, description="Notification title")
     message: str = Field(..., description="Notification message")
     notification_type: NotificationType = Field(
         NotificationType.INFO, description="Type of notification"
@@ -168,15 +171,15 @@ class NotificationBulkCreate(BaseModel):
     )
     recipient_ids: List[str] = Field(..., description="List of recipient IDs")
     recipient_type: str = Field(
-        ..., description="Type of recipients ('user' or 'group')"
+        ..., max_length=20, description="Type of recipients ('user' or 'group')"
     )
     sender_id: Optional[str] = Field(
-        None, description="ID of the sender (user or system)"
+        None, max_length=100, description="ID of the sender (user or system)"
     )
     expires_at: Optional[datetime] = Field(None, description="Optional expiration time")
     data: Optional[Dict[str, Any]] = Field(
         None, description="Additional data for the notification"
     )
     action_url: Optional[str] = Field(
-        None, description="Optional URL for action button"
+        None, max_length=500, description="Optional URL for action button"
     )

@@ -27,14 +27,12 @@ async def create_log_entry(log_entry: LogEntryCreate, db: Session = Depends(get_
 @router.get("/", response_model=List[LogEntryResponse])
 async def get_log_entries(
     level: Optional[str] = Query(None, description="Filter by log level"),
-    service: Optional[str] = Query(None, description="Filter by service name"),
+    source: Optional[str] = Query(None, description="Filter by source name"),
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
     end_time: Optional[str] = Query(None, description="End time (ISO format)"),
     trace_id: Optional[str] = Query(None, description="Filter by trace ID"),
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
-    limit: int = Query(
-        100, ge=1, le=1000, description="Maximum number of logs to return"
-    ),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of logs to return"),
     offset: int = Query(0, ge=0, description="Number of logs to skip"),
     db: Session = Depends(get_db),
 ):
@@ -48,7 +46,7 @@ async def get_log_entries(
     # Create query params object
     query_params = LogQueryParams(
         level=level,
-        service=service,
+        source=source,
         start_time=parsed_start_time,
         end_time=parsed_end_time,
         trace_id=trace_id,
@@ -65,7 +63,7 @@ async def get_log_entry(log_id: int, db: Session = Depends(get_db)):
     """
     Get a specific log entry by ID.
     """
-    log_entry = await LoggingService.get_log_entry_by_id(db, log_id)
+    log_entry = await LoggingService.get_log_entry(db, log_id)
     if not log_entry:
         raise HTTPException(status_code=404, detail="Log entry not found")
     return log_entry
@@ -74,14 +72,12 @@ async def get_log_entry(log_id: int, db: Session = Depends(get_db)):
 @router.get("/export/json")
 async def export_logs_to_json(
     level: Optional[str] = Query(None, description="Filter by log level"),
-    service: Optional[str] = Query(None, description="Filter by service name"),
+    source: Optional[str] = Query(None, description="Filter by source name"),
     start_time: Optional[str] = Query(None, description="Start time (ISO format)"),
     end_time: Optional[str] = Query(None, description="End time (ISO format)"),
     trace_id: Optional[str] = Query(None, description="Filter by trace ID"),
     user_id: Optional[str] = Query(None, description="Filter by user ID"),
-    limit: int = Query(
-        1000, ge=1, le=10000, description="Maximum number of logs to export"
-    ),
+    limit: int = Query(1000, ge=1, le=10000, description="Maximum number of logs to export"),
     offset: int = Query(0, ge=0, description="Number of logs to skip"),
     db: Session = Depends(get_db),
 ):
@@ -95,7 +91,7 @@ async def export_logs_to_json(
     # Create query params object
     query_params = LogQueryParams(
         level=level,
-        service=service,
+        source=source,
         start_time=parsed_start_time,
         end_time=parsed_end_time,
         trace_id=trace_id,
@@ -104,14 +100,15 @@ async def export_logs_to_json(
         offset=offset,
     )
 
+    # Export logs to JSON
     json_data = await LoggingService.export_logs_to_json(db, query_params)
 
-    # Return as downloadable JSON file
-    response = Response(content=json_data, media_type="application/json")
-    response.headers["Content-Disposition"] = (
-        f"attachment; filename=logs_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+    # Return JSON response
+    return Response(
+        content=json_data,
+        media_type="application/json",
+        headers={"Content-Disposition": 'attachment; filename="logs.json"'},
     )
-    return response
 
 
 @router.get("/stats/summary")
@@ -128,5 +125,5 @@ async def get_log_statistics(
     parsed_end_time = parse_datetime(end_time) if end_time else None
 
     return await LoggingService.get_log_statistics(
-        db, parsed_start_time, parsed_end_time
+        db, start_time=parsed_start_time, end_time=parsed_end_time
     )

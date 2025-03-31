@@ -7,16 +7,18 @@ import hmac
 import json
 from unittest.mock import MagicMock, patch
 
+from app.core.settings import get_settings
 from app.modules.webhooks.models import (
     WebhookDelivery,
     WebhookDeliveryStatus,
     WebhookEndpoint,
+    WebhookEvent,
     WebhookSubscription,
 )
 from app.modules.webhooks.service import WebhooksService
 
 
-def test_create_endpoint(client, db_session):
+async def test_create_endpoint(client, db_session):
     """Test creating a webhook endpoint."""
     # Create endpoint data
     endpoint_data = {
@@ -27,7 +29,9 @@ def test_create_endpoint(client, db_session):
     }
 
     # Send request
-    response = client.post("/webhooks/endpoints", json=endpoint_data)
+    response = client.post(
+        f"{get_settings().API_V1_STR}/webhooks/endpoints/", json=endpoint_data
+    )
 
     # Check response
     assert response.status_code == 201
@@ -48,7 +52,7 @@ def test_create_endpoint(client, db_session):
     assert db_endpoint.secret == endpoint_data["secret"]  # Secret should be stored
 
 
-def test_get_endpoints(client, db_session):
+async def test_get_endpoints(client, db_session):
     """Test getting webhook endpoints."""
     # Create test endpoints
     for i in range(3):
@@ -62,7 +66,7 @@ def test_get_endpoints(client, db_session):
     db_session.commit()
 
     # Send request
-    response = client.get("/webhooks/endpoints")
+    response = client.get(f"{get_settings().API_V1_STR}/webhooks/endpoints/")
 
     # Check response
     assert response.status_code == 200
@@ -71,7 +75,7 @@ def test_get_endpoints(client, db_session):
     assert all("secret" not in endpoint for endpoint in data)
 
 
-def test_create_subscription(client, db_session):
+async def test_create_subscription(client, db_session):
     """Test creating a webhook subscription."""
     # Create test endpoint
     endpoint = WebhookEndpoint(
@@ -91,7 +95,9 @@ def test_create_subscription(client, db_session):
     }
 
     # Send request
-    response = client.post("/webhooks/subscriptions", json=subscription_data)
+    response = client.post(
+        f"{get_settings().API_V1_STR}/webhooks/subscriptions/", json=subscription_data
+    )
 
     # Check response
     assert response.status_code == 201
@@ -111,7 +117,7 @@ def test_create_subscription(client, db_session):
     assert db_subscription.event_types == subscription_data["event_types"]
 
 
-def test_get_subscriptions(client, db_session):
+async def test_get_subscriptions(client, db_session):
     """Test getting webhook subscriptions."""
     # Create test endpoint
     endpoint = WebhookEndpoint(
@@ -134,7 +140,7 @@ def test_get_subscriptions(client, db_session):
     db_session.commit()
 
     # Send request
-    response = client.get("/webhooks/subscriptions")
+    response = client.get(f"{get_settings().API_V1_STR}/webhooks/subscriptions/")
 
     # Check response
     assert response.status_code == 200
@@ -143,7 +149,7 @@ def test_get_subscriptions(client, db_session):
 
 
 @patch("httpx.AsyncClient.post")
-def test_trigger_webhook(mock_post, client, db_session):
+async def test_trigger_webhook(mock_post, client, db_session):
     """Test triggering a webhook."""
     # Mock the HTTP response
     mock_response = MagicMock()
@@ -177,7 +183,9 @@ def test_trigger_webhook(mock_post, client, db_session):
     }
 
     # Send request
-    response = client.post("/webhooks/trigger", json=trigger_data)
+    response = client.post(
+        f"{get_settings().API_V1_STR}/webhooks/trigger", json=trigger_data
+    )
 
     # Check response
     assert response.status_code == 202
@@ -218,7 +226,7 @@ def test_trigger_webhook(mock_post, client, db_session):
 
 
 @patch("httpx.AsyncClient.post")
-def test_retry_failed_deliveries(mock_post, client, db_session):
+async def test_retry_failed_deliveries(mock_post, client, db_session):
     """Test retrying failed webhook deliveries."""
     # Mock the HTTP response
     mock_response = MagicMock()
