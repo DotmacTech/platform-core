@@ -1,0 +1,23 @@
+name: Deploy to Kubernetes
+
+on:
+  push:
+    branches:
+      - main  # Deploy when code is merged into main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Set up Kubeconfig
+        run: |
+          echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig
+          export KUBECONFIG=kubeconfig
+
+      - name: Update Kubernetes Deployment
+        run: |
+          kubectl set image deployment/my-app my-app=myrepo/myimage:latest --namespace=default
+          kubectl rollout status deployment/my-app --namespace=default
