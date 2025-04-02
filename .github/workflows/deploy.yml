@@ -18,11 +18,12 @@ jobs:
           echo "${{ secrets.KUBE_CONFIG_BASE64 }}" | base64 -d > $HOME/.kube/config
           chmod 600 $HOME/.kube/config
           export KUBECONFIG=$HOME/.kube/config
-          kubectl config use-context kind-my-cluster  # Ensure correct cluster
-          kubectl cluster-info
 
-      - name: Debug Kubernetes Connection
-        run: kubectl get nodes  # Check if connection works
+      - name: Debug Kubernetes Contexts
+        run: |
+          kubectl config get-contexts  # Show available contexts
+          kubectl config use-context kind-my-cluster  # Set correct context
+          kubectl cluster-info  # Verify connection
 
       - name: Update Kubernetes Deployment
         run: |
