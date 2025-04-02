@@ -14,8 +14,14 @@ jobs:
 
       - name: Set up Kubeconfig
         run: |
-          echo "${{ secrets.KUBE_CONFIG }}" > kubeconfig
-          export KUBECONFIG=kubeconfig
+          echo "${{ secrets.KUBE_CONFIG }}" > $HOME/.kube/config
+          chmod 600 $HOME/.kube/config
+          export KUBECONFIG=$HOME/.kube/config
+          kubectl config use-context kind-my-cluster  # Ensure correct cluster
+          kubectl cluster-info
+
+      - name: Debug Kubernetes Connection
+        run: kubectl get nodes  # Check if connection works
 
       - name: Update Kubernetes Deployment
         run: |
