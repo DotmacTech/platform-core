@@ -19,6 +19,10 @@ jobs:
           chmod 600 $HOME/.kube/config
           export KUBECONFIG=$HOME/.kube/config
 
+          # Update the server URL in the kubeconfig file if needed
+          kubectl config set-cluster kind-my-cluster --server=https://127.0.0.1:46189
+          kubectl config use-context kind-my-cluster  # Set the correct context
+
       - name: Debug Kubernetes Contexts
         run: |
           kubectl config get-contexts  # Show available contexts
